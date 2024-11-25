@@ -15,28 +15,32 @@ def splitWord(pickedDB_Split, db):
 def check_currDB_path():
 
     currDBPath = None
-    if '.sde' in currDB_conn:
+    if '.sde' in Database_to_Change:
         for db in dbList:
-            if splitWord(currDB_Split, db.lower()):
+            if splitWord(changeDB_Split, db.lower()):
                 dbPath = os.path.join(dbFolder, db)
                 dbworkspace = dbPath.split('.sde')[0] + '.sde'
                 currDBWS = arcpy.Describe(dbworkspace)
                 currDBPath = currDBWS.catalogPath
                 print('The "Current Path" exists in the W:\\GIS\\Database Connections folder.')
                 break
-    if '.gdb' in currDB_conn:
+
+    if '.gdb' in Database_to_Change:
         print('The "Current Path" is not in W:\\GIS\\Database Connections, trying something else')
         for lyr in lyrList:
             if lyr.isFeatureLayer and not lyr.isGroupLayer:
                 lyrdesc = arcpy.Describe(lyr)
                 lyrdescPath = lyrdesc.catalogPath
                 lyrworkspace = lyrdescPath.split('.gdb')[0] + '.gdb'
-                if currDB_conn in lyrworkspace:
+                if Database_to_Change in lyrworkspace:
                     currDBPath = lyrworkspace
                     break
 
     if currDBPath:
-        arcpy.AddMessage(currDBPath)
+        arcpy.AddMessage(f"The starting database exists")
+    else:
+        arcpy.AddError('The "Current Path" does not exist in the W:\\GIS\\Database Connections folder.'
+                       '  This tool cannot work with unknown databases.')
     return currDBPath
 
 
@@ -44,7 +48,7 @@ def changeSoucePaths(currDBPath):
 
     # Feature Classes in new Database:
     newFCList = []
-    arcpy.env.workspace = newDB_conn
+    arcpy.env.workspace = New_Database
     datasets = arcpy.ListDatasets(feature_type='Feature')
     datasets = [''] + datasets if datasets is not None else []
     for ds in datasets:
@@ -54,17 +58,21 @@ def changeSoucePaths(currDBPath):
 
     # Make a list of all the layers that are in the database listed in the "Database Source to Change" parameter
     # Note: These layers may be changed if another with the same name is found in the new database
-    newDBdescWS = arcpy.Describe(newDB_conn)
+    newDBdescWS = arcpy.Describe(New_Database)
     newDBPath = newDBdescWS.catalogPath
     currDBdescWS = arcpy.Describe(currDBPath)
     currDBcp = currDBdescWS.connectionProperties
+    currDBcpServer = currDBcp.server.lower()
+    currDBcpDB = currDBcp.database.lower()
     for lyr in lyrList:
         if lyr.isFeatureLayer:
             try:
                 lyrdesc = arcpy.Describe(lyr)
-                lyrdescPath = lyrdesc.catalogPath
-                dbPath = os.path.dirname(os.path.dirname(lyrdescPath))
-                if currDBPath in dbPath:
+                if lyrdesc.Name.split('.')[-1] in newFCList:
+                    lyrdescPath = lyrdesc.catalogPath
+                    dbPath = os.path.dirname(os.path.dirname(lyrdescPath))
+                    # if currDBPath in dbPath:
+
                     def changedb():
                         lyrName = lyrdesc.featureClass.name.split('.')[-1]
                         if lyrName in newFCList:
@@ -74,7 +82,9 @@ def changeSoucePaths(currDBPath):
                     if ".sde" in dbPath:
                         dbPathdescWS = arcpy.Describe(dbPath)
                         dbPathcp = dbPathdescWS.connectionProperties
-                        if dbPathcp.server == currDBcp.server and dbPathcp.database == currDBcp.database:
+                        dbPathcpServer = dbPathcp.server.lower()
+                        dbPathcpDatabase = dbPathcp.database.lower()
+                        if dbPathcpServer == currDBcpServer and dbPathcpDatabase == currDBcpDB:
                             changedb()
                     else:
                         changedb()
@@ -98,13 +108,13 @@ if __name__ == '__main__':
         else:
             lyrList.remove(lyr)
 
-    currDB_conn = arcpy.GetParameterAsText(0)
-    currDB_Split = os.path.basename(currDB_conn).lower()
-    newDB_conn = arcpy.GetParameterAsText(1)
-    newDB_Split = os.path.basename(newDB_conn).lower()
+    Database_to_Change = arcpy.GetParameterAsText(0)
+    changeDB_Split = os.path.basename(Database_to_Change).lower()
+    New_Database = arcpy.GetParameterAsText(1)
+    newDB_Split = os.path.basename(New_Database).lower()
 
 
-    arcpy.AddMessage(currDB_Split)
+    arcpy.AddMessage(changeDB_Split)
     arcpy.AddMessage(newDB_Split)
 
     dbFolder = "W:\\GIS\\Database Connections"  # change to folder that contains sde connections
